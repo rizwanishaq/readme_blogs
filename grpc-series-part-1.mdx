@@ -1,0 +1,201 @@
+---
+title: "gRPC Series with Node.js - Unary RPC"
+date: "2022-04-18"
+tags: ["grpc", "nodejs", "Unary RPC"]
+_id: "49d50757-c0c1-4b2e-8246-f820bfae34b3"
+---
+
+# gRPC Series with Node.js - Unary RPC
+
+## Table of Contents
+
+- [What is gRPC?](#what-is-grpc)
+- [Protocol Buffers](#protocol-buffers)
+- [Setting Up the Project](#setting-up-the-project)
+- [Writing the Server](#writing-the-server)
+- [Creating the Client](#creating-the-client)
+- [Running the Code](#running-the-code)
+- [Conclusion](#conclusion)
+
+## What is gRPC?
+
+According to [grpc.io](https://grpc.io/):
+**_gRPC is a modern open-source high-performance Remote Procedure Call (RPC) framework that can run in any environment. It can efficiently connect services in and across data centers with pluggable support for load balancing, tracing, health checking, and authentication. It is also applicable in the last mile of distributed computing to connect devices, mobile applications, and browsers to backend services._**
+
+This gRPC uses HTTP/2 as the underlying transport mechanism and protocol buffers as a message format, as explained in detail in this [gRPC crash course](https://www.youtube.com/watch?v=Yw4rkaTc0f8&t=2794s).
+
+There are different gRPC modes, including:
+
+- Unary RPC
+- Server Streaming RPC
+- Client Streaming RPC
+- Bidirectional Streaming RPC
+
+In this article, we will focus on Unary RPC, where a client sends a request to the server, and the server processes the request and sends back the response after processing.
+
+## Protocol Buffers
+
+Before writing the protocol buffers file, let's understand what protocol buffer is. Protocol buffers, or protobufs for short, is a method of serializing structured data, useful for transmitting data over the wire or storing it on disk. A detailed explanation of protocol buffers is available in this [crash course video](https://www.youtube.com/watch?v=46O73On0gyI&t=1716s), and I highly recommend watching it.
+
+```protobuf
+// protocol/square.proto
+syntax = "proto3";
+
+package square.v1;
+
+message squareRequest {
+    double number = 1;
+}
+
+message squareResponse {
+    double number = 1;
+}
+
+service SquareService {
+    rpc square(squareRequest) returns (squareResponse) {}
+}
+```
+
+The protocol buffer structure begins with defining the syntax, which is proto3 in this case. We then define the package name; here, we use square.v1. Next, we define the request and response structures for our square service. With the protocol buffer file ready, we can proceed to using it.
+
+## Setting Up the Project
+
+Let's set up our project step by step:
+
+1. Initialize the project and install the required dependencies:
+
+```sh
+npm init -y
+npm install grpc @grpc/proto-loader
+```
+
+## Writing the Server
+
+The server-side code is implemented in server.js:
+
+```javascript
+// Importing dependencies
+const grpc = require("grpc");
+const path = require("path");
+const protoLoader = require("@grpc/proto-loader");
+
+// Package definition
+const packageDefinition = protoLoader.loadSync(
+  path.resolve(__dirname, "protocol/square.proto"),
+  {
+    keepCase: true,
+    longs: String,
+    enums: String,
+    default: true,
+    oneofs: true,
+  }
+);
+
+const protoDescriptor = grpc.loadPackageDefinition(packageDefinition);
+
+// Get the package name
+const squarePackage = protoDescriptor.square.v1;
+
+// Calculate the square of the number
+const square = (call, callback) => {
+  const number = call.request.number;
+  const square_number = Math.pow(number, 2);
+  response = { number: square_number };
+  error = null;
+  callback(error, response);
+};
+
+// Creating the Server
+const server = new grpc.Server();
+// Adding services to the server
+server.addService(squarePackage.SquareService.service, {
+  square: square,
+});
+
+// Binding the server
+const HOST = "localhost";
+const PORT = 90052;
+server.bind(`${HOST}:${PORT}`, grpc.ServerCredentials.createInsecure());
+
+// Starting the gRPC server
+server.start();
+console.log(`Server started on ${HOST}:${PORT}`);
+```
+
+The server.js file begins by importing necessary dependencies, loading the protobuf file (square.proto), and obtaining the service package. The square function calculates the square of the provided number. The gRPC server is created, and the service is added. Finally, the server is bound to a host and port, and it starts listening.
+
+To run the server, execute the following command:
+
+```sh
+node server.js
+```
+
+You should see the following output:
+
+```sh
+Server started on localhost:90052
+```
+
+## Creating the Client
+
+The client-side code is implemented in client.js:
+
+```javascript
+// Importing dependencies
+const grpc = require("grpc");
+const path = require("path");
+const protoLoader = require("@grpc/proto-loader");
+
+// Package definition
+const packageDefinition = protoLoader.loadSync(
+  path.resolve(__dirname, "protocol/square.proto"),
+  {
+    keepCase: true,
+    longs: String,
+    enums: String,
+    default: true,
+    oneofs: true,
+  }
+);
+
+const protoDescriptor = grpc.loadPackageDefinition(packageDefinition);
+
+// Get the package name
+const squarePackage = protoDescriptor.square.v1;
+
+// Connect the client to the server
+const HOST = "localhost";
+const PORT = 90052;
+const client = new squarePackage.SquareService(
+  `${HOST}:${PORT}`,
+  grpc.credentials.createInsecure()
+);
+
+// Make the request for the server to calculate the square of the number
+const request = { number: 10.2 };
+
+// Make the request and get the response
+client.square(request, (err, response) => {
+  console.log(response);
+});
+```
+
+The client.js file follows a similar structure to the server code. It imports dependencies, loads the protobuf definition, creates a gRPC client instance, and sends a square request to the server.
+
+To run the client, execute the following command in another terminal:
+
+```sh
+{ number: 104.0399999999 }
+```
+
+You should see the following output:
+
+```sh
+{ number: 104.0399999999 }
+```
+
+This output indicates that the server successfully calculated the square of the input number.
+
+## Conclusion
+
+In this tutorial, we covered the basics of gRPC and implemented a Unary RPC communication pattern using Node.js. This simple example provides a starting point, and gRPC offers more advanced features and patterns for building distributed systems. Feel free to explore other gRPC modes like Server Streaming, Client Streaming, and Bidirectional Streaming to harness the full power of this modern RPC framework.
